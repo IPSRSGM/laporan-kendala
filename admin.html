@@ -14,10 +14,7 @@ body{
   margin:0;
   padding:20px;
 }
-h2{
-  text-align:center;
-  color:white;
-}
+h2{text-align:center;color:white}
 .card{
   background:rgba(255,255,255,.25);
   backdrop-filter:blur(12px);
@@ -26,7 +23,7 @@ h2{
   margin-bottom:15px;
   color:white;
 }
-select, textarea, input[type=file]{
+select, textarea{
   width:100%;
   margin-top:6px;
   padding:10px;
@@ -45,11 +42,6 @@ button{
   font-weight:600;
   cursor:pointer;
 }
-img{
-  width:100%;
-  border-radius:12px;
-  margin:10px 0;
-}
 #toast{
   position:fixed;
   top:20px;
@@ -59,6 +51,7 @@ img{
   padding:12px 20px;
   border-radius:14px;
   display:none;
+  z-index:999;
 }
 </style>
 </head>
@@ -67,29 +60,30 @@ img{
 
 <h2>📋 Dashboard Admin / Teknisi</h2>
 
-<div id="toast"></div>
+<button onclick="exportExcel()">⬇ Export Excel</button>
 
+<div id="toast"></div>
 <div id="daftarLaporan">Memuat data...</div>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+<!-- Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-// ====== FIREBASE CONFIG ======
+// ================== FIREBASE CONFIG ==================
 const firebaseConfig = {
   apiKey: "ISI_API_KEY_FIREBASE",
-  authDomain: "xxxxx.firebaseapp.com",
-  projectId: "laporan-kendala-rsgm-165f6",
-  storageBucket: "laporan-kendala-rsgm-165f6.appspot.com"
+  authDomain: "laporan-kendala-rsgm-165f6.firebaseapp.com",
+  projectId: "laporan-kendala-rsgm-165f6"
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const storage = firebase.storage();
 
-// ====== TOAST ======
+// ================== TOAST ==================
 function showToast(msg){
   const t=document.getElementById("toast");
   t.innerText=msg;
@@ -97,8 +91,9 @@ function showToast(msg){
   setTimeout(()=>t.style.display="none",3000);
 }
 
-// ====== REALTIME DATA ======
-db.collection("laporan").orderBy("waktu","desc")
+// ================== LOAD DATA REALTIME ==================
+db.collection("laporan")
+.orderBy("waktu","desc")
 .onSnapshot(snapshot=>{
   const daftar=document.getElementById("daftarLaporan");
   daftar.innerHTML="";
@@ -114,14 +109,10 @@ db.collection("laporan").orderBy("waktu","desc")
     card.className="card";
 
     card.innerHTML=`
-      <b>Nama:</b> ${d.nama}<br>
-      <b>Unit:</b> ${d.unit}<br><br>
-      <b>Kendala:</b><br>${d.kendala}<br>
+      <b>Nama:</b> ${d.nama || "-"}<br>
+      <b>Unit:</b> ${d.unit || "-"}<br><br>
 
-      ${d.foto ? `<img src="${d.foto}">` : ""}
-
-      <label>Upload Foto</label>
-      <input type="file" id="foto-${doc.id}" accept="image/*">
+      <b>Kendala:</b><br>${d.kendala || "-"}<br>
 
       <label>Status</label>
       <select id="status-${doc.id}">
@@ -132,38 +123,51 @@ db.collection("laporan").orderBy("waktu","desc")
       </select>
 
       <label>Respon Teknisi</label>
-      <textarea id="respon-${doc.id}">${d.respon||""}</textarea>
+      <textarea id="respon-${doc.id}">${d.respon || ""}</textarea>
 
       <button onclick="simpan('${doc.id}')">💾 Simpan</button>
     `;
-
     daftar.appendChild(card);
   });
 });
 
-// ====== SIMPAN DATA + FOTO ======
+// ================== SIMPAN DATA ==================
 function simpan(id){
   const status=document.getElementById(`status-${id}`).value;
   const respon=document.getElementById(`respon-${id}`).value;
-  const file=document.getElementById(`foto-${id}`).files[0];
 
-  if(file){
-    const ref=storage.ref(`foto-laporan/${id}.jpg`);
-    ref.put(file).then(()=>{
-      ref.getDownloadURL().then(url=>{
-        db.collection("laporan").doc(id).update({
-          status:status,
-          respon:respon,
-          foto:url
-        }).then(()=>showToast("Data & foto tersimpan ✅"));
+  db.collection("laporan").doc(id).update({
+    status:status,
+    respon:respon
+  })
+  .then(()=>showToast("Data tersimpan ✅"))
+  .catch(err=>alert("Error: "+err.message));
+}
+
+// ================== EXPORT EXCEL ==================
+function exportExcel(){
+  db.collection("laporan")
+  .orderBy("waktu","desc")
+  .get()
+  .then(snapshot=>{
+    let data=[];
+    snapshot.forEach(doc=>{
+      const d=doc.data();
+      data.push({
+        Nama: d.nama || "",
+        Unit: d.unit || "",
+        Kendala: d.kendala || "",
+        Status: d.status || "",
+        Respon: d.respon || "",
+        Waktu: d.waktu ? d.waktu.toDate().toLocaleString("id-ID") : ""
       });
     });
-  }else{
-    db.collection("laporan").doc(id).update({
-      status:status,
-      respon:respon
-    }).then(()=>showToast("Data tersimpan ✅"));
-  }
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Laporan IPSRS");
+    XLSX.writeFile(wb, "laporan_ipsrs.xlsx");
+  });
 }
 </script>
 
