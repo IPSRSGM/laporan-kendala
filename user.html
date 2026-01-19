@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Laporan Kendala Realtime</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:'Poppins',sans-serif;
+  background:linear-gradient(135deg,#4facfe,#00f2fe);
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  padding:30px 0;
+}
+.app{
+  width:100%;
+  max-width:600px;
+  background:rgba(255,255,255,.25);
+  backdrop-filter:blur(16px);
+  border-radius:22px;
+  padding:26px;
+  box-shadow:0 25px 50px rgba(0,0,0,.25);
+}
+.header{
+  text-align:center;
+  color:#fff;
+  margin-bottom:20px;
+}
+label{
+  color:#fff;
+  font-size:13px;
+  margin-top:14px;
+  display:block;
+}
+input,textarea{
+  width:100%;
+  padding:14px;
+  margin-top:6px;
+  border-radius:14px;
+  border:none;
+  outline:none;
+}
+textarea{height:90px}
+button{
+  width:100%;
+  margin-top:20px;
+  padding:16px;
+  border:none;
+  border-radius:16px;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  color:white;
+  font-size:16px;
+  font-weight:600;
+  cursor:pointer;
+}
+#toast{
+  position:fixed;
+  bottom:25px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#111;
+  color:white;
+  padding:14px 20px;
+  border-radius:14px;
+  display:none;
+  z-index:999;
+}
+.laporan-list{
+  margin-top:25px;
+  max-height:420px;
+  overflow-y:auto;
+}
+.laporan-item{
+  background:white;
+  border-radius:14px;
+  padding:12px 15px;
+  margin-bottom:12px;
+}
+.nama{font-weight:600}
+.unit{font-size:13px;margin-bottom:6px}
+.status-bar{
+  padding:6px 12px;
+  border-radius:12px;
+  font-weight:600;
+  color:white;
+  display:inline-block;
+  font-size:12px;
+}
+.baru{background:#fbbf24}
+.proses{background:#3b82f6}
+.selesai{background:#22c55e}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+  <div class="header">
+    <h2>📋 Laporan Kendala</h2>
+    <p>Kirim & pantau status laporan realtime</p>
+  </div>
+
+  <label>Nama</label>
+  <input id="nama">
+
+  <label>Unit / Ruangan</label>
+  <input id="unit">
+
+  <label>Kendala</label>
+  <textarea id="kendala"></textarea>
+
+  <button id="btnKirim">🚀 Kirim Laporan</button>
+
+  <div class="laporan-list" id="laporanList"></div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// ================= FIREBASE CONFIG =================
+firebase.initializeApp({
+  apiKey: "ISI_API_KEY_KAMU",
+  authDomain: "laporan-kendala-rsgm-165f6.firebaseapp.com",
+  projectId: "laporan-kendala-rsgm-165f6"
+});
+
+const db = firebase.firestore();
+
+// ================= ELEMENT =================
+const namaInput = document.getElementById("nama");
+const unitInput = document.getElementById("unit");
+const kendalaInput = document.getElementById("kendala");
+const laporanList = document.getElementById("laporanList");
+const btnKirim = document.getElementById("btnKirim");
+
+// ================= TOAST =================
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.innerText = msg;
+  t.style.display = "block";
+  setTimeout(()=> t.style.display="none",3000);
+}
+
+// ================= KIRIM LAPORAN =================
+btnKirim.addEventListener("click",()=>{
+  const nama = namaInput.value.trim();
+  const unit = unitInput.value.trim();
+  const kendala = kendalaInput.value.trim();
+
+  if(!nama || !unit || !kendala){
+    toast("⚠️ Semua kolom wajib diisi");
+    return;
+  }
+
+  db.collection("laporan").add({
+    nama,
+    unit,
+    kendala,
+    status: "baru",
+    respon: "",
+    waktu: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(()=>{
+    toast("✅ Laporan berhasil dikirim");
+    namaInput.value="";
+    unitInput.value="";
+    kendalaInput.value="";
+  }).catch(err=>{
+    toast("❌ Gagal kirim laporan");
+    console.error(err);
+  });
+});
+
+// ================= REALTIME LISTENER =================
+db.collection("laporan")
+.orderBy("waktu","desc")
+.onSnapshot(snapshot=>{
+  laporanList.innerHTML="";
+  snapshot.forEach(doc=>{
+    const d = doc.data();
+    const div = document.createElement("div");
+    div.className="laporan-item";
+
+    div.innerHTML = `
+      <div class="nama">${d.nama}</div>
+      <div class="unit">Unit: ${d.unit}</div>
+      <div>🛠️ ${d.kendala}</div>
+      <div style="margin-top:8px">
+        <span class="status-bar ${d.status}">
+          ${d.status.toUpperCase()}
+        </span>
+      </div>
+      ${
+        d.respon
+        ? `<div style="margin-top:6px;font-size:13px">💬 ${d.respon}</div>`
+        : `<div style="margin-top:6px;font-size:13px;color:#888">⏳ Menunggu teknisi</div>`
+      }
+    `;
+    laporanList.appendChild(div);
+  });
+});
+</script>
+
+</body>
+</html>
