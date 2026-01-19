@@ -2,44 +2,54 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Dashboard Admin / Teknisi</title>
+<title>Dashboard Admin IPSRS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
 <style>
 body{
   font-family:'Poppins',sans-serif;
-  background: linear-gradient(135deg,#3399ff,#66ccff);
+  background:linear-gradient(135deg,#1e90ff,#00c6ff);
   margin:0;
-  padding:30px;
-}
-h2{text-align:center;color:white;margin-bottom:25px;}
-.card{
-  background: rgba(255,255,255,0.2);
-  backdrop-filter: blur(12px);
-  border-radius:16px;
   padding:20px;
+}
+h2{
+  text-align:center;
+  color:white;
+}
+.card{
+  background:rgba(255,255,255,.25);
+  backdrop-filter:blur(12px);
+  border-radius:18px;
+  padding:15px;
   margin-bottom:15px;
   color:white;
-  box-shadow:0 10px 30px rgba(0,0,0,0.2);
 }
-select, textarea, button{
+select, textarea, input[type=file]{
   width:100%;
+  margin-top:6px;
   padding:10px;
   border-radius:12px;
   border:none;
-  outline:none;
-  font-size:14px;
-  margin-top:6px;
 }
-textarea{resize:none; background: rgba(255,255,255,0.15); color:white;}
+textarea{resize:none}
 button{
-  background: linear-gradient(135deg,#3399ff,#66ccff);
+  margin-top:10px;
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:14px;
+  background:linear-gradient(135deg,#0066ff,#00ccff);
   color:white;
   font-weight:600;
   cursor:pointer;
-  transition: transform 0.1s;
 }
-button:active{transform: scale(0.96);}
+img{
+  width:100%;
+  border-radius:12px;
+  margin:10px 0;
+}
 #toast{
   position:fixed;
   top:20px;
@@ -49,102 +59,113 @@ button:active{transform: scale(0.96);}
   padding:12px 20px;
   border-radius:14px;
   display:none;
-  z-index:999;
 }
 </style>
 </head>
+
 <body>
 
-<h2>📋 Dashboard Laporan Kendala</h2>
+<h2>📋 Dashboard Admin / Teknisi</h2>
 
 <div id="toast"></div>
-<audio id="notifSound">
-  <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
-</audio>
 
 <div id="daftarLaporan">Memuat data...</div>
 
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <script>
+// ====== FIREBASE CONFIG ======
 const firebaseConfig = {
-  apiKey: "PASTE_API_KEY",
+  apiKey: "ISI_API_KEY_FIREBASE",
   authDomain: "xxxxx.firebaseapp.com",
-  projectId: "laporan-kendala-rsgm-165f6"
+  projectId: "laporan-kendala-rsgm-165f6",
+  storageBucket: "laporan-kendala-rsgm-165f6.appspot.com"
 };
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const storage = firebase.storage();
 
-let pertama = true;
-
-// ===== TOAST FUNCTION =====
+// ====== TOAST ======
 function showToast(msg){
-  const t = document.getElementById("toast");
-  t.innerText = msg;
-  t.style.display = "block";
-  setTimeout(()=> t.style.display="none",3000);
+  const t=document.getElementById("toast");
+  t.innerText=msg;
+  t.style.display="block";
+  setTimeout(()=>t.style.display="none",3000);
 }
 
-// ===== LISTENER LAPORAN =====
+// ====== REALTIME DATA ======
 db.collection("laporan").orderBy("waktu","desc")
 .onSnapshot(snapshot=>{
-  if(!pertama){
-    snapshot.docChanges().forEach(change=>{
-      if(change.type==="added"){
-        document.getElementById("notifSound").play();
-        showToast("🔔 Laporan baru masuk!");
-      }
-    });
-  }
-  pertama=false;
-
-  const daftar = document.getElementById("daftarLaporan");
+  const daftar=document.getElementById("daftarLaporan");
   daftar.innerHTML="";
+
   if(snapshot.empty){
-    daftar.innerHTML="<p style='color:white;text-align:center;'>Belum ada laporan</p>";
-  } else {
-    snapshot.forEach(doc=>{
-      const d=doc.data();
-      const card = document.createElement("div");
-      card.className="card";
-      card.innerHTML=`
-        <b>Nama:</b> ${d.nama}<br>
-        <b>Unit:</b> ${d.unit}<br>
-        <b>Kendala:</b> ${d.kendala}<br><br>
-
-        <label>Status:</label>
-        <select id="status-${doc.id}" onchange="ubahStatus('${doc.id}')">
-          <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
-          <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
-          <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
-          <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
-        </select><br><br>
-
-        <label>Respon Teknisi:</label>
-        <textarea id="respon-${doc.id}">${d.respon||""}</textarea>
-        <button onclick="simpanRespon('${doc.id}')">💾 Simpan Respon</button>
-      `;
-      daftar.appendChild(card);
-    });
+    daftar.innerHTML="Belum ada laporan";
+    return;
   }
+
+  snapshot.forEach(doc=>{
+    const d=doc.data();
+    const card=document.createElement("div");
+    card.className="card";
+
+    card.innerHTML=`
+      <b>Nama:</b> ${d.nama}<br>
+      <b>Unit:</b> ${d.unit}<br><br>
+      <b>Kendala:</b><br>${d.kendala}<br>
+
+      ${d.foto ? `<img src="${d.foto}">` : ""}
+
+      <label>Upload Foto</label>
+      <input type="file" id="foto-${doc.id}" accept="image/*">
+
+      <label>Status</label>
+      <select id="status-${doc.id}">
+        <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
+        <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
+        <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
+        <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
+      </select>
+
+      <label>Respon Teknisi</label>
+      <textarea id="respon-${doc.id}">${d.respon||""}</textarea>
+
+      <button onclick="simpan('${doc.id}')">💾 Simpan</button>
+    `;
+
+    daftar.appendChild(card);
+  });
 });
 
-// ===== UPDATE STATUS =====
-function ubahStatus(id){
-  const val = document.getElementById(`status-${id}`).value;
-  db.collection("laporan").doc(id).update({status: val})
-    .then(()=> showToast("Status tersimpan ✅"))
-    .catch(err=> showToast("Gagal menyimpan status ❌"));
-}
+// ====== SIMPAN DATA + FOTO ======
+function simpan(id){
+  const status=document.getElementById(`status-${id}`).value;
+  const respon=document.getElementById(`respon-${id}`).value;
+  const file=document.getElementById(`foto-${id}`).files[0];
 
-// ===== UPDATE RESPON =====
-function simpanRespon(id){
-  const val = document.getElementById(`respon-${id}`).value.trim();
-  db.collection("laporan").doc(id).update({respon: val})
-    .then(()=> showToast("Respon tersimpan ✅"))
-    .catch(err=> showToast("Gagal menyimpan respon ❌"));
+  if(file){
+    const ref=storage.ref(`foto-laporan/${id}.jpg`);
+    ref.put(file).then(()=>{
+      ref.getDownloadURL().then(url=>{
+        db.collection("laporan").doc(id).update({
+          status:status,
+          respon:respon,
+          foto:url
+        }).then(()=>showToast("Data & foto tersimpan ✅"));
+      });
+    });
+  }else{
+    db.collection("laporan").doc(id).update({
+      status:status,
+      respon:respon
+    }).then(()=>showToast("Data tersimpan ✅"));
+  }
 }
 </script>
+
 </body>
 </html>
