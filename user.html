@@ -2,215 +2,219 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Laporan Kendala Sarpras RSGM Unair</title>
+<title>Dashboard Admin IPSRS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
 <style>
-*{box-sizing:border-box}
 body{
-  margin:0;
-  min-height:100vh;
   font-family:'Poppins',sans-serif;
-  background:linear-gradient(135deg,#4facfe,#00f2fe);
-  display:flex;
-  justify-content:center;
-  align-items:flex-start;
-  padding:30px 0;
+  background:linear-gradient(135deg,#1e90ff,#00c6ff);
+  margin:0;
+  padding:20px;
 }
-.app{
-  width:100%;
-  max-width:600px;
+h2{text-align:center;color:black}
+.card{
   background:rgba(255,255,255,.25);
-  backdrop-filter:blur(16px);
-  border-radius:22px;
-  padding:26px;
-  box-shadow:0 25px 50px rgba(0,0,0,.25);
+  backdrop-filter:blur(12px);
+  border-radius:18px;
+  padding:15px;
+  margin-bottom:15px;
+  color:black;
 }
-.header{
-  text-align:center;
-  color:#fff;
-  margin-bottom:20px;
-}
-label{
-  color:#fff;
-  font-size:13px;
-  margin-top:14px;
-  display:block;
-}
-input,textarea{
+select, textarea, input{
   width:100%;
-  padding:14px;
   margin-top:6px;
-  border-radius:14px;
+  padding:10px;
+  border-radius:12px;
   border:none;
-  outline:none;
 }
-textarea{height:90px}
+textarea{resize:none}
 button{
+  margin-top:10px;
   width:100%;
-  margin-top:20px;
-  padding:16px;
+  padding:12px;
   border:none;
-  border-radius:16px;
-  background:linear-gradient(135deg,#667eea,#764ba2);
+  border-radius:14px;
+  background:linear-gradient(135deg,#0066ff,#00ccff);
   color:white;
-  font-size:16px;
   font-weight:600;
   cursor:pointer;
 }
+.filter{
+  background:white;
+  border-radius:16px;
+  padding:12px;
+  margin-bottom:15px;
+}
 #toast{
   position:fixed;
-  bottom:25px;
-  left:50%;
-  transform:translateX(-50%);
+  top:20px;
+  right:20px;
   background:#111;
   color:white;
-  padding:14px 20px;
+  padding:12px 20px;
   border-radius:14px;
   display:none;
   z-index:999;
 }
-.laporan-list{
-  margin-top:25px;
-  max-height:420px;
-  overflow-y:auto;
-}
-.laporan-item{
-  background:white;
-  border-radius:14px;
-  padding:12px 15px;
-  margin-bottom:12px;
-}
-.nama{font-weight:600}
-.unit{font-size:13px;margin-bottom:6px}
-.status-bar{
-  padding:6px 12px;
-  border-radius:12px;
-  font-weight:600;
-  color:white;
-  display:inline-block;
+.waktu{
   font-size:12px;
+  color:#333;
+  margin-bottom:6px;
 }
-.baru{background:#fbbf24}
-.proses{background:#3b82f6}
-.selesai{background:#22c55e}
 </style>
 </head>
 
 <body>
 
-<div class="app">
-  <div class="header">
-    <h2>📋 Laporan Kendala</h2>
-    <p>RSGM Universitas Airlangga</p>
-  </div>
+<h2>📋 Dashboard Admin / Teknisi</h2>
 
-  <label>Nama</label>
-  <input id="nama">
+<div class="filter">
+  <label>🔍 Cari Laporan</label>
+  <input type="text" id="searchInput" placeholder="Nama / Unit / Kendala">
 
-  <label>Unit / Ruangan</label>
-  <input id="unit">
+  <label>📅 Filter Tanggal</label>
+  <input type="date" id="dateInput">
 
-  <label>Kendala</label>
-  <textarea id="kendala"></textarea>
-
-  <button id="btnKirim">🚀 Kirim Laporan</button>
-
-  <div class="laporan-list" id="laporanList"></div>
+  <button onclick="exportExcel()">⬇ Export Excel</button>
 </div>
 
 <div id="toast"></div>
+<div id="daftarLaporan">Memuat data...</div>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+<!-- Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <script>
-// ================= FIREBASE CONFIG =================
+// ================= FIREBASE =================
 firebase.initializeApp({
-  apiKey: "ISI_API_KEY_KAMU",
+  apiKey: "ISI_API_KEY_FIREBASE",
   authDomain: "laporan-kendala-rsgm-165f6.firebaseapp.com",
   projectId: "laporan-kendala-rsgm-165f6"
 });
-
 const db = firebase.firestore();
 
-// ================= ELEMENT =================
-const namaInput = document.getElementById("nama");
-const unitInput = document.getElementById("unit");
-const kendalaInput = document.getElementById("kendala");
-const laporanList = document.getElementById("laporanList");
-const btnKirim = document.getElementById("btnKirim");
-
 // ================= TOAST =================
-function toast(msg){
-  const t = document.getElementById("toast");
-  t.innerText = msg;
-  t.style.display = "block";
-  setTimeout(()=> t.style.display="none",3000);
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.innerText=msg;
+  t.style.display="block";
+  setTimeout(()=>t.style.display="none",3000);
 }
 
-// ================= KIRIM LAPORAN =================
-btnKirim.addEventListener("click",()=>{
-  const nama = namaInput.value.trim();
-  const unit = unitInput.value.trim();
-  const kendala = kendalaInput.value.trim();
+let allData=[];
 
-  if(!nama || !unit || !kendala){
-    toast("⚠️ Semua kolom wajib diisi");
-    return;
-  }
-
-  db.collection("laporan").add({
-    nama,
-    unit,
-    kendala,
-    status: "baru",
-    respon: "",
-    waktu: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(()=>{
-    toast("✅ Laporan berhasil dikirim");
-    namaInput.value="";
-    unitInput.value="";
-    kendalaInput.value="";
-  }).catch(err=>{
-    toast("❌ Gagal kirim laporan");
-    console.error(err);
-  });
-});
-
-// ================= REALTIME LISTENER =================
+// ================= LOAD REALTIME =================
 db.collection("laporan")
 .orderBy("waktu","desc")
 .onSnapshot(snapshot=>{
-  laporanList.innerHTML="";
+  allData=[];
   snapshot.forEach(doc=>{
-    const d = doc.data();
-    const div = document.createElement("div");
-    div.className="laporan-item";
-
-    div.innerHTML = `
-      <div class="nama">${d.nama}</div>
-      <div class="unit">Unit: ${d.unit}</div>
-      <div>🛠️ ${d.kendala}</div>
-      <div style="margin-top:8px">
-        <span class="status-bar ${d.status}">
-          ${d.status.toUpperCase()}
-        </span>
-      </div>
-      ${
-        d.respon
-        ? `<div style="margin-top:6px;font-size:13px">💬 ${d.respon}</div>`
-        : `<div style="margin-top:6px;font-size:13px;color:#888">⏳ Menunggu teknisi</div>`
-      }
-    `;
-    laporanList.appendChild(div);
+    allData.push({id:doc.id, ...doc.data()});
   });
+  renderData();
 });
+
+// ================= RENDER DATA =================
+function renderData(){
+  const daftar=document.getElementById("daftarLaporan");
+  daftar.innerHTML="";
+
+  const search=document.getElementById("searchInput").value.toLowerCase();
+  const date=document.getElementById("dateInput").value;
+
+  let filtered=allData.filter(d=>{
+    const textMatch =
+      (d.nama||"").toLowerCase().includes(search) ||
+      (d.unit||"").toLowerCase().includes(search) ||
+      (d.kendala||"").toLowerCase().includes(search);
+
+    let dateMatch=true;
+    if(date && d.waktu){
+      const t=d.waktu.toDate().toISOString().slice(0,10);
+      dateMatch = t===date;
+    }
+    return textMatch && dateMatch;
+  });
+
+  if(filtered.length===0){
+    daftar.innerHTML="Tidak ada laporan";
+    return;
+  }
+
+  filtered.forEach(d=>{
+    const card=document.createElement("div");
+    card.className="card";
+
+    card.innerHTML=`
+      <div class="waktu">
+        🕒 ${d.waktu ? d.waktu.toDate().toLocaleString("id-ID") : "-"}
+      </div>
+
+      <b>Nama:</b> ${d.nama||"-"}<br>
+      <b>Unit:</b> ${d.unit||"-"}<br><br>
+
+      <b>Kendala:</b><br>${d.kendala||"-"}<br>
+
+      <label>Status</label>
+      <select id="status-${d.id}">
+        <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
+        <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
+        <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
+        <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
+      </select>
+
+      <label>Respon Teknisi</label>
+      <textarea id="respon-${d.id}">${d.respon||""}</textarea>
+
+      <button onclick="simpan('${d.id}')">💾 Simpan</button>
+    `;
+    daftar.appendChild(card);
+  });
+}
+
+// ================= SIMPAN =================
+function simpan(id){
+  const status=document.getElementById(`status-${id}`).value;
+  const respon=document.getElementById(`respon-${id}`).value;
+
+  db.collection("laporan").doc(id).update({
+    status,respon
+  })
+  .then(()=>showToast("Data tersimpan ✅"))
+  .catch(err=>alert(err.message));
+}
+
+// ================= EXPORT =================
+function exportExcel(){
+  let data=[];
+  allData.forEach(d=>{
+    data.push({
+      Nama:d.nama||"",
+      Unit:d.unit||"",
+      Kendala:d.kendala||"",
+      Status:d.status||"",
+      Respon:d.respon||"",
+      Waktu:d.waktu?d.waktu.toDate().toLocaleString("id-ID"):""
+    });
+  });
+
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Laporan IPSRS");
+  XLSX.writeFile(wb,"laporan_ipsrs.xlsx");
+}
+
+// ================= EVENT =================
+document.getElementById("searchInput").addEventListener("input",renderData);
+document.getElementById("dateInput").addEventListener("change",renderData);
 </script>
 
 </body>
 </html>
-
