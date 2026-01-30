@@ -42,12 +42,28 @@ button{
   font-weight:600;
   cursor:pointer;
 }
-.filter{
+.filter,.statistik{
   background:white;
   border-radius:16px;
   padding:12px;
   margin-bottom:15px;
 }
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  text-align:center;
+}
+.stat-box{
+  background:#f1f5f9;
+  border-radius:12px;
+  padding:10px;
+  font-weight:600;
+}
+#wrapper-print{display:block}
+#wrapper-print.print-mode button,
+#wrapper-print.print-mode .filter{display:none}
+
 #toast{
   position:fixed;
   top:20px;
@@ -59,18 +75,33 @@ button{
   display:none;
   z-index:999;
 }
-.waktu{
-  font-size:12px;
-  color:#333;
-  margin-bottom:6px;
+.waktu{font-size:12px;color:#333;margin-bottom:6px}
+
+@media print{
+  body{background:white}
+  button,.filter{display:none}
 }
 </style>
 </head>
 
 <body>
 
-<h2>📋 Dashboard Admin / Teknisi</h2>
+<div id="wrapper-print">
 
+<h2>📋 Dashboard Admin / Teknisi IPSRS</h2>
+
+<!-- STATISTIK -->
+<div class="statistik">
+  <b>📊 Statistik Bulan Ini</b>
+  <div class="stat-grid">
+    <div class="stat-box">Total<br><span id="st-total">0</span></div>
+    <div class="stat-box">Baru<br><span id="st-baru">0</span></div>
+    <div class="stat-box">Proses<br><span id="st-proses">0</span></div>
+    <div class="stat-box">Selesai<br><span id="st-selesai">0</span></div>
+  </div>
+</div>
+
+<!-- FILTER -->
 <div class="filter">
   <label>🔍 Cari Laporan</label>
   <input type="text" id="searchInput" placeholder="Nama / Unit / Kendala">
@@ -79,10 +110,13 @@ button{
   <input type="date" id="dateInput">
 
   <button onclick="exportExcel()">⬇ Export Excel</button>
+  <button onclick="window.print()">🖨️ Cetak Laporan</button>
 </div>
 
 <div id="toast"></div>
 <div id="daftarLaporan">Memuat data...</div>
+
+</div>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -92,15 +126,13 @@ button{
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-// ================= FIREBASE =================
 firebase.initializeApp({
-  apiKey: "ISI_API_KEY_FIREBASE",
-  authDomain: "laporan-kendala-rsgm-165f6.firebaseapp.com",
-  projectId: "laporan-kendala-rsgm-165f6"
+  apiKey:"ISI_API_KEY_FIREBASE",
+  authDomain:"laporan-kendala-rsgm-165f6.firebaseapp.com",
+  projectId:"laporan-kendala-rsgm-165f6"
 });
-const db = firebase.firestore();
+const db=firebase.firestore();
 
-// ================= TOAST =================
 function showToast(msg){
   const t=document.getElementById("toast");
   t.innerText=msg;
@@ -110,35 +142,52 @@ function showToast(msg){
 
 let allData=[];
 
-// ================= LOAD REALTIME =================
+// batas 1 bulan
+const batas=new Date();
+batas.setDate(1);
+
 db.collection("laporan")
+.where("waktu",">=",batas)
 .orderBy("waktu","desc")
 .onSnapshot(snapshot=>{
   allData=[];
   snapshot.forEach(doc=>{
-    allData.push({id:doc.id, ...doc.data()});
+    allData.push({id:doc.id,...doc.data()});
   });
   renderData();
+  hitungStatistik();
 });
 
-// ================= RENDER DATA =================
+function hitungStatistik(){
+  let total=0,baru=0,proses=0,selesai=0;
+  allData.forEach(d=>{
+    total++;
+    if(d.status==="baru")baru++;
+    if(d.status==="proses")proses++;
+    if(d.status==="selesai")selesai++;
+  });
+  st-total.innerText=total;
+  st-baru.innerText=baru;
+  st-proses.innerText=proses;
+  st-selesai.innerText=selesai;
+}
+
 function renderData(){
   const daftar=document.getElementById("daftarLaporan");
   daftar.innerHTML="";
 
-  const search=document.getElementById("searchInput").value.toLowerCase();
-  const date=document.getElementById("dateInput").value;
+  const search=searchInput.value.toLowerCase();
+  const date=dateInput.value;
 
-  let filtered=allData.filter(d=>{
-    const textMatch =
+  const filtered=allData.filter(d=>{
+    const textMatch=
       (d.nama||"").toLowerCase().includes(search) ||
       (d.unit||"").toLowerCase().includes(search) ||
       (d.kendala||"").toLowerCase().includes(search);
 
     let dateMatch=true;
     if(date && d.waktu){
-      const t=d.waktu.toDate().toISOString().slice(0,10);
-      dateMatch = t===date;
+      dateMatch=d.waktu.toDate().toISOString().slice(0,10)===date;
     }
     return textMatch && dateMatch;
   });
@@ -151,23 +200,18 @@ function renderData(){
   filtered.forEach(d=>{
     const card=document.createElement("div");
     card.className="card";
-
     card.innerHTML=`
-      <div class="waktu">
-        🕒 ${d.waktu ? d.waktu.toDate().toLocaleString("id-ID") : "-"}
-      </div>
-
-      <b>Nama:</b> ${d.nama||"-"}<br>
-      <b>Unit:</b> ${d.unit||"-"}<br><br>
-
-      <b>Kendala:</b><br>${d.kendala||"-"}<br>
+      <div class="waktu">🕒 ${d.waktu?d.waktu.toDate().toLocaleString("id-ID"):"-"}</div>
+      <b>Nama:</b> ${d.nama}<br>
+      <b>Unit:</b> ${d.unit}<br><br>
+      <b>Kendala:</b><br>${d.kendala}<br>
 
       <label>Status</label>
       <select id="status-${d.id}">
-        <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
-        <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
-        <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
-        <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
+        <option ${d.status==="baru"?"selected":""}>baru</option>
+        <option ${d.status==="proses"?"selected":""}>proses</option>
+        <option ${d.status==="pending"?"selected":""}>pending</option>
+        <option ${d.status==="selesai"?"selected":""}>selesai</option>
       </select>
 
       <label>Respon Teknisi</label>
@@ -179,41 +223,30 @@ function renderData(){
   });
 }
 
-// ================= SIMPAN =================
 function simpan(id){
-  const status=document.getElementById(`status-${id}`).value;
-  const respon=document.getElementById(`respon-${id}`).value;
-
   db.collection("laporan").doc(id).update({
-    status,respon
-  })
-  .then(()=>showToast("Data tersimpan ✅"))
-  .catch(err=>alert(err.message));
+    status:document.getElementById(`status-${id}`).value,
+    respon:document.getElementById(`respon-${id}`).value
+  }).then(()=>showToast("Data tersimpan ✅"));
 }
 
-// ================= EXPORT =================
 function exportExcel(){
-  let data=[];
-  allData.forEach(d=>{
-    data.push({
-      Nama:d.nama||"",
-      Unit:d.unit||"",
-      Kendala:d.kendala||"",
-      Status:d.status||"",
-      Respon:d.respon||"",
-      Waktu:d.waktu?d.waktu.toDate().toLocaleString("id-ID"):""
-    });
-  });
-
+  const data=allData.map(d=>({
+    Nama:d.nama,
+    Unit:d.unit,
+    Kendala:d.kendala,
+    Status:d.status,
+    Respon:d.respon,
+    Waktu:d.waktu?d.waktu.toDate().toLocaleString("id-ID"):""
+  }));
   const ws=XLSX.utils.json_to_sheet(data);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Laporan IPSRS");
   XLSX.writeFile(wb,"laporan_ipsrs.xlsx");
 }
 
-// ================= EVENT =================
-document.getElementById("searchInput").addEventListener("input",renderData);
-document.getElementById("dateInput").addEventListener("change",renderData);
+searchInput.addEventListener("input",renderData);
+dateInput.addEventListener("change",renderData);
 </script>
 
 </body>
