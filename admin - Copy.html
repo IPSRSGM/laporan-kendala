@@ -2,44 +2,68 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Dashboard Admin / Teknisi</title>
+<title>Dashboard Admin IPSRS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
 <style>
 body{
   font-family:'Poppins',sans-serif;
-  background: linear-gradient(135deg,#3399ff,#66ccff);
+  background:linear-gradient(135deg,#1e90ff,#00c6ff);
   margin:0;
-  padding:30px;
-}
-h2{text-align:center;color:white;margin-bottom:25px;}
-.card{
-  background: rgba(255,255,255,0.2);
-  backdrop-filter: blur(12px);
-  border-radius:16px;
   padding:20px;
-  margin-bottom:15px;
-  color:white;
-  box-shadow:0 10px 30px rgba(0,0,0,0.2);
 }
-select, textarea, button{
+h2{text-align:center;color:black}
+.card{
+  background:rgba(255,255,255,.25);
+  backdrop-filter:blur(12px);
+  border-radius:18px;
+  padding:15px;
+  margin-bottom:15px;
+  color:black;
+}
+select, textarea, input{
   width:100%;
+  margin-top:6px;
   padding:10px;
   border-radius:12px;
   border:none;
-  outline:none;
-  font-size:14px;
-  margin-top:6px;
 }
-textarea{resize:none; background: rgba(255,255,255,0.15); color:white;}
+textarea{resize:none}
 button{
-  background: linear-gradient(135deg,#3399ff,#66ccff);
+  margin-top:10px;
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:14px;
+  background:linear-gradient(135deg,#0066ff,#00ccff);
   color:white;
   font-weight:600;
   cursor:pointer;
-  transition: transform 0.1s;
 }
-button:active{transform: scale(0.96);}
+.filter,.statistik{
+  background:white;
+  border-radius:16px;
+  padding:12px;
+  margin-bottom:15px;
+}
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  text-align:center;
+}
+.stat-box{
+  background:#f1f5f9;
+  border-radius:12px;
+  padding:10px;
+  font-weight:600;
+}
+#wrapper-print{display:block}
+#wrapper-print.print-mode button,
+#wrapper-print.print-mode .filter{display:none}
+
 #toast{
   position:fixed;
   top:20px;
@@ -51,100 +75,179 @@ button:active{transform: scale(0.96);}
   display:none;
   z-index:999;
 }
+.waktu{font-size:12px;color:#333;margin-bottom:6px}
+
+@media print{
+  body{background:white}
+  button,.filter{display:none}
+}
 </style>
 </head>
+
 <body>
 
-<h2>📋 Dashboard Laporan Kendala</h2>
+<div id="wrapper-print">
+
+<h2>📋 Dashboard Admin / Teknisi IPSRS</h2>
+
+<!-- STATISTIK -->
+<div class="statistik">
+  <b>📊 Statistik Bulan Ini</b>
+  <div class="stat-grid">
+    <div class="stat-box">Total<br><span id="st-total">0</span></div>
+    <div class="stat-box">Baru<br><span id="st-baru">0</span></div>
+    <div class="stat-box">Proses<br><span id="st-proses">0</span></div>
+    <div class="stat-box">Selesai<br><span id="st-selesai">0</span></div>
+  </div>
+</div>
+
+<!-- FILTER -->
+<div class="filter">
+  <label>🔍 Cari Laporan</label>
+  <input type="text" id="searchInput" placeholder="Nama / Unit / Kendala">
+
+  <label>📅 Filter Tanggal</label>
+  <input type="date" id="dateInput">
+
+  <button onclick="exportExcel()">⬇ Export Excel</button>
+  <button onclick="window.print()">🖨️ Cetak Laporan</button>
+</div>
 
 <div id="toast"></div>
-<audio id="notifSound">
-  <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
-</audio>
-
 <div id="daftarLaporan">Memuat data...</div>
 
+</div>
+
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+<!-- Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <script>
-const firebaseConfig = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "xxxxx.firebaseapp.com",
-  projectId: "laporan-kendala-rsgm-165f6"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+firebase.initializeApp({
+  apiKey:"ISI_API_KEY_FIREBASE",
+  authDomain:"laporan-kendala-rsgm-165f6.firebaseapp.com",
+  projectId:"laporan-kendala-rsgm-165f6"
+});
+const db=firebase.firestore();
 
-let pertama = true;
-
-// ===== TOAST FUNCTION =====
 function showToast(msg){
-  const t = document.getElementById("toast");
-  t.innerText = msg;
-  t.style.display = "block";
-  setTimeout(()=> t.style.display="none",3000);
+  const t=document.getElementById("toast");
+  t.innerText=msg;
+  t.style.display="block";
+  setTimeout(()=>t.style.display="none",3000);
 }
 
-// ===== LISTENER LAPORAN =====
-db.collection("laporan").orderBy("waktu","desc")
+let allData=[];
+
+// batas 1 bulan
+const batas=new Date();
+batas.setDate(1);
+
+db.collection("laporan")
+.where("waktu",">=",batas)
+.orderBy("waktu","desc")
 .onSnapshot(snapshot=>{
-  if(!pertama){
-    snapshot.docChanges().forEach(change=>{
-      if(change.type==="added"){
-        document.getElementById("notifSound").play();
-        showToast("🔔 Laporan baru masuk!");
-      }
-    });
-  }
-  pertama=false;
-
-  const daftar = document.getElementById("daftarLaporan");
-  daftar.innerHTML="";
-  if(snapshot.empty){
-    daftar.innerHTML="<p style='color:white;text-align:center;'>Belum ada laporan</p>";
-  } else {
-    snapshot.forEach(doc=>{
-      const d=doc.data();
-      const card = document.createElement("div");
-      card.className="card";
-      card.innerHTML=`
-        <b>Nama:</b> ${d.nama}<br>
-        <b>Unit:</b> ${d.unit}<br>
-        <b>Kendala:</b> ${d.kendala}<br><br>
-
-        <label>Status:</label>
-        <select id="status-${doc.id}" onchange="ubahStatus('${doc.id}')">
-          <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
-          <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
-          <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
-          <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
-        </select><br><br>
-
-        <label>Respon Teknisi:</label>
-        <textarea id="respon-${doc.id}">${d.respon||""}</textarea>
-        <button onclick="simpanRespon('${doc.id}')">💾 Simpan Respon</button>
-      `;
-      daftar.appendChild(card);
-    });
-  }
+  allData=[];
+  snapshot.forEach(doc=>{
+    allData.push({id:doc.id,...doc.data()});
+  });
+  renderData();
+  hitungStatistik();
 });
 
-// ===== UPDATE STATUS =====
-function ubahStatus(id){
-  const val = document.getElementById(`status-${id}`).value;
-  db.collection("laporan").doc(id).update({status: val})
-    .then(()=> showToast("Status tersimpan ✅"))
-    .catch(err=> showToast("Gagal menyimpan status ❌"));
+function hitungStatistik(){
+  let total=0,baru=0,proses=0,selesai=0;
+  allData.forEach(d=>{
+    total++;
+    if(d.status==="baru")baru++;
+    if(d.status==="proses")proses++;
+    if(d.status==="selesai")selesai++;
+  });
+  st-total.innerText=total;
+  st-baru.innerText=baru;
+  st-proses.innerText=proses;
+  st-selesai.innerText=selesai;
 }
 
-// ===== UPDATE RESPON =====
-function simpanRespon(id){
-  const val = document.getElementById(`respon-${id}`).value.trim();
-  db.collection("laporan").doc(id).update({respon: val})
-    .then(()=> showToast("Respon tersimpan ✅"))
-    .catch(err=> showToast("Gagal menyimpan respon ❌"));
+function renderData(){
+  const daftar=document.getElementById("daftarLaporan");
+  daftar.innerHTML="";
+
+  const search=searchInput.value.toLowerCase();
+  const date=dateInput.value;
+
+  const filtered=allData.filter(d=>{
+    const textMatch=
+      (d.nama||"").toLowerCase().includes(search) ||
+      (d.unit||"").toLowerCase().includes(search) ||
+      (d.kendala||"").toLowerCase().includes(search);
+
+    let dateMatch=true;
+    if(date && d.waktu){
+      dateMatch=d.waktu.toDate().toISOString().slice(0,10)===date;
+    }
+    return textMatch && dateMatch;
+  });
+
+  if(filtered.length===0){
+    daftar.innerHTML="Tidak ada laporan";
+    return;
+  }
+
+  filtered.forEach(d=>{
+    const card=document.createElement("div");
+    card.className="card";
+    card.innerHTML=`
+      <div class="waktu">🕒 ${d.waktu?d.waktu.toDate().toLocaleString("id-ID"):"-"}</div>
+      <b>Nama:</b> ${d.nama}<br>
+      <b>Unit:</b> ${d.unit}<br><br>
+      <b>Kendala:</b><br>${d.kendala}<br>
+
+      <label>Status</label>
+      <select id="status-${d.id}">
+        <option ${d.status==="baru"?"selected":""}>baru</option>
+        <option ${d.status==="proses"?"selected":""}>proses</option>
+        <option ${d.status==="pending"?"selected":""}>pending</option>
+        <option ${d.status==="selesai"?"selected":""}>selesai</option>
+      </select>
+
+      <label>Respon Teknisi</label>
+      <textarea id="respon-${d.id}">${d.respon||""}</textarea>
+
+      <button onclick="simpan('${d.id}')">💾 Simpan</button>
+    `;
+    daftar.appendChild(card);
+  });
 }
+
+function simpan(id){
+  db.collection("laporan").doc(id).update({
+    status:document.getElementById(`status-${id}`).value,
+    respon:document.getElementById(`respon-${id}`).value
+  }).then(()=>showToast("Data tersimpan ✅"));
+}
+
+function exportExcel(){
+  const data=allData.map(d=>({
+    Nama:d.nama,
+    Unit:d.unit,
+    Kendala:d.kendala,
+    Status:d.status,
+    Respon:d.respon,
+    Waktu:d.waktu?d.waktu.toDate().toLocaleString("id-ID"):""
+  }));
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Laporan IPSRS");
+  XLSX.writeFile(wb,"laporan_ipsrs.xlsx");
+}
+
+searchInput.addEventListener("input",renderData);
+dateInput.addEventListener("change",renderData);
 </script>
+
 </body>
 </html>
