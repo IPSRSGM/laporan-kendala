@@ -147,16 +147,19 @@ const batas=new Date();
 batas.setDate(1);
 
 db.collection("laporan")
-.where("waktu",">=",batas)
 .orderBy("waktu","desc")
 .onSnapshot(snapshot=>{
   allData=[];
   snapshot.forEach(doc=>{
-    allData.push({id:doc.id,...doc.data()});
+    const d=doc.data();
+    if(d.waktu){ // cegah error data lama
+      allData.push({id:doc.id,...d});
+    }
   });
   renderData();
   hitungStatistik();
 });
+
 
 function hitungStatistik(){
   let total=0,baru=0,proses=0,selesai=0;
