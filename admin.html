@@ -2,254 +2,234 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Dashboard Admin IPSRS</title>
+<title>Laporan Kendala Sarpras</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
 <style>
+*{box-sizing:border-box}
 body{
-  font-family:'Poppins',sans-serif;
-  background:linear-gradient(135deg,#1e90ff,#00c6ff);
   margin:0;
+  font-family:Poppins,sans-serif;
+  background:linear-gradient(135deg,#4facfe,#00f2fe);
   padding:20px;
 }
-h2{text-align:center;color:black}
-.card{
-  background:rgba(255,255,255,.25);
-  backdrop-filter:blur(12px);
-  border-radius:18px;
-  padding:15px;
-  margin-bottom:15px;
-  color:black;
-}
-select, textarea, input{
-  width:100%;
-  margin-top:6px;
-  padding:10px;
+.container{
+  max-width:1100px;
+  margin:auto;
+  background:#fff;
   border-radius:12px;
-  border:none;
+  padding:20px;
 }
-textarea{resize:none}
-button{
-  margin-top:10px;
+h2{margin-top:0}
+
+input,select,textarea,button{
+  padding:10px;
+  margin:5px 0;
   width:100%;
-  padding:12px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-family:Poppins;
+}
+button{
+  background:#4facfe;
+  color:#fff;
   border:none;
-  border-radius:14px;
-  background:linear-gradient(135deg,#0066ff,#00ccff);
-  color:white;
-  font-weight:600;
   cursor:pointer;
 }
-.filter,.statistik{
-  background:white;
-  border-radius:16px;
-  padding:12px;
-  margin-bottom:15px;
-}
-.stat-grid{
+button:hover{opacity:.9}
+
+.grid{
   display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:10px;
-  text-align:center;
+  grid-template-columns:1fr 1fr;
+  gap:20px;
 }
-.stat-box{
-  background:#f1f5f9;
-  border-radius:12px;
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:15px;
+}
+th,td{
   padding:10px;
+  border-bottom:1px solid #ddd;
+  text-align:left;
+}
+th{background:#f1f5f9}
+
+.status{
+  padding:5px 10px;
+  border-radius:20px;
+  font-size:12px;
+}
+.open{background:#fee2e2;color:#b91c1c}
+.process{background:#fef9c3;color:#92400e}
+.done{background:#dcfce7;color:#166534}
+
+.stat{
+  display:flex;
+  gap:15px;
+}
+.card{
+  flex:1;
+  background:#f1f5f9;
+  padding:15px;
+  border-radius:10px;
+  text-align:center;
   font-weight:600;
 }
-#wrapper-print{display:block}
-#wrapper-print.print-mode button,
-#wrapper-print.print-mode .filter{display:none}
-
-#toast{
-  position:fixed;
-  top:20px;
-  right:20px;
-  background:#111;
-  color:white;
-  padding:12px 20px;
-  border-radius:14px;
-  display:none;
-  z-index:999;
-}
-.waktu{font-size:12px;color:#333;margin-bottom:6px}
 
 @media print{
-  body{background:white}
-  button,.filter{display:none}
+  button,select,input,textarea{display:none}
+  body{background:#fff}
 }
 </style>
 </head>
 
 <body>
 
-<div id="wrapper-print">
+<div class="container">
+<h2>📋 Sistem Laporan Kendala Sarpras</h2>
 
-<h2>📋 Dashboard Admin / Teknisi IPSRS</h2>
+<!-- FORM USER -->
+<h3>➕ Input Laporan</h3>
+<input id="ruangan" placeholder="Nama Ruangan">
+<textarea id="kendala" placeholder="Deskripsi Kendala"></textarea>
+<button onclick="kirim()">Kirim Laporan</button>
 
-<!-- STATISTIK -->
-<div class="statistik">
-  <b>📊 Statistik Bulan Ini</b>
-  <div class="stat-grid">
-    <div class="stat-box">Total<br><span id="st-total">0</span></div>
-    <div class="stat-box">Baru<br><span id="st-baru">0</span></div>
-    <div class="stat-box">Proses<br><span id="st-proses">0</span></div>
-    <div class="stat-box">Selesai<br><span id="st-selesai">0</span></div>
-  </div>
-</div>
+<hr>
 
 <!-- FILTER -->
-<div class="filter">
-  <label>🔍 Cari Laporan</label>
-  <input type="text" id="searchInput" placeholder="Nama / Unit / Kendala">
+<select id="filterBulan" onchange="renderData()">
+  <option value="now">Bulan Ini</option>
+  <option value="all">Semua Data</option>
+</select>
 
-  <label>📅 Filter Tanggal</label>
-  <input type="date" id="dateInput">
-
-  <button onclick="exportExcel()">⬇ Export Excel</button>
-  <button onclick="window.print()">🖨️ Cetak Laporan</button>
+<!-- STATISTIK -->
+<div class="stat">
+  <div class="card">Total Laporan<br><span id="total">0</span></div>
+  <div class="card">Selesai<br><span id="selesai">0</span></div>
+  <div class="card">Proses<br><span id="proses">0</span></div>
 </div>
 
-<div id="toast"></div>
-<div id="daftarLaporan">Memuat data...</div>
+<!-- TABEL -->
+<table>
+<thead>
+<tr>
+<th>Ruangan</th>
+<th>Kendala</th>
+<th>Status</th>
+<th>Admin</th>
+<th>Waktu</th>
+</tr>
+</thead>
+<tbody id="tabel"></tbody>
+</table>
+
+<br>
+<button onclick="window.print()">🖨️ Cetak Laporan</button>
 
 </div>
-
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<!-- Excel -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
+// 🔥 GANTI CONFIG FIREBASE KAMU
 firebase.initializeApp({
-  apiKey:"ISI_API_KEY_FIREBASE",
-  authDomain:"laporan-kendala-rsgm-165f6.firebaseapp.com",
-  projectId:"laporan-kendala-rsgm-165f6"
+  apiKey: "API_KEY",
+  authDomain: "PROJECT.firebaseapp.com",
+  projectId: "PROJECT_ID"
 });
-const db=firebase.firestore();
 
-function showToast(msg){
-  const t=document.getElementById("toast");
-  t.innerText=msg;
-  t.style.display="block";
-  setTimeout(()=>t.style.display="none",3000);
-}
+const db = firebase.firestore();
+let allData = [];
 
-let allData=[];
-
-// batas 1 bulan
-const batas=new Date();
-batas.setDate(1);
-
+// REALTIME
 db.collection("laporan")
 .orderBy("waktu","desc")
-.onSnapshot(snapshot=>{
+.onSnapshot(snap=>{
   allData=[];
-  snapshot.forEach(doc=>{
+  snap.forEach(doc=>{
     const d=doc.data();
-    if(d.waktu){ // cegah error data lama
+    if(d.waktu){
       allData.push({id:doc.id,...d});
     }
   });
   renderData();
-  hitungStatistik();
 });
 
+// KIRIM LAPORAN
+function kirim(){
+  const r = ruangan.value.trim();
+  const k = kendala.value.trim();
+  if(!r||!k) return alert("Lengkapi data");
 
-function hitungStatistik(){
-  let total=0,baru=0,proses=0,selesai=0;
-  allData.forEach(d=>{
-    total++;
-    if(d.status==="baru")baru++;
-    if(d.status==="proses")proses++;
-    if(d.status==="selesai")selesai++;
+  db.collection("laporan").add({
+    ruangan:r,
+    kendala:k,
+    status:"Open",
+    waktu:firebase.firestore.FieldValue.serverTimestamp()
   });
-  st-total.innerText=total;
-  st-baru.innerText=baru;
-  st-proses.innerText=proses;
-  st-selesai.innerText=selesai;
+
+  ruangan.value="";
+  kendala.value="";
 }
 
+// RENDER + FILTER
 function renderData(){
-  const daftar=document.getElementById("daftarLaporan");
-  daftar.innerHTML="";
+  const tbody=document.getElementById("tabel");
+  tbody.innerHTML="";
 
-  const search=searchInput.value.toLowerCase();
-  const date=dateInput.value;
+  const filter=document.getElementById("filterBulan").value;
+  const now=new Date();
 
-  const filtered=allData.filter(d=>{
-    const textMatch=
-      (d.nama||"").toLowerCase().includes(search) ||
-      (d.unit||"").toLowerCase().includes(search) ||
-      (d.kendala||"").toLowerCase().includes(search);
+  let selesai=0, proses=0;
 
-    let dateMatch=true;
-    if(date && d.waktu){
-      dateMatch=d.waktu.toDate().toISOString().slice(0,10)===date;
-    }
-    return textMatch && dateMatch;
+  allData.filter(d=>{
+    if(filter==="all") return true;
+    const t=d.waktu.toDate();
+    return t.getMonth()===now.getMonth() &&
+           t.getFullYear()===now.getFullYear();
+  }).forEach(d=>{
+    if(d.status==="Selesai") selesai++;
+    if(d.status==="Proses") proses++;
+
+    tbody.innerHTML+=`
+    <tr>
+      <td>${d.ruangan}</td>
+      <td>${d.kendala}</td>
+      <td>
+        <span class="status ${
+          d.status==="Open"?"open":
+          d.status==="Proses"?"process":"done"
+        }">${d.status}</span>
+      </td>
+      <td>
+        <select onchange="ubahStatus('${d.id}',this.value)">
+          <option ${d.status==="Open"?"selected":""}>Open</option>
+          <option ${d.status==="Proses"?"selected":""}>Proses</option>
+          <option ${d.status==="Selesai"?"selected":""}>Selesai</option>
+        </select>
+      </td>
+      <td>${d.waktu.toDate().toLocaleString()}</td>
+    </tr>`;
   });
 
-  if(filtered.length===0){
-    daftar.innerHTML="Tidak ada laporan";
-    return;
-  }
-
-  filtered.forEach(d=>{
-    const card=document.createElement("div");
-    card.className="card";
-    card.innerHTML=`
-      <div class="waktu">🕒 ${d.waktu?d.waktu.toDate().toLocaleString("id-ID"):"-"}</div>
-      <b>Nama:</b> ${d.nama}<br>
-      <b>Unit:</b> ${d.unit}<br><br>
-      <b>Kendala:</b><br>${d.kendala}<br>
-
-      <label>Status</label>
-      <select id="status-${d.id}">
-        <option ${d.status==="baru"?"selected":""}>baru</option>
-        <option ${d.status==="proses"?"selected":""}>proses</option>
-        <option ${d.status==="pending"?"selected":""}>pending</option>
-        <option ${d.status==="selesai"?"selected":""}>selesai</option>
-      </select>
-
-      <label>Respon Teknisi</label>
-      <textarea id="respon-${d.id}">${d.respon||""}</textarea>
-
-      <button onclick="simpan('${d.id}')">💾 Simpan</button>
-    `;
-    daftar.appendChild(card);
-  });
+  total.innerText=tbody.children.length;
+  selesaiEl.innerText=selesai;
+  prosesEl.innerText=proses;
 }
 
-function simpan(id){
-  db.collection("laporan").doc(id).update({
-    status:document.getElementById(`status-${id}`).value,
-    respon:document.getElementById(`respon-${id}`).value
-  }).then(()=>showToast("Data tersimpan ✅"));
+function ubahStatus(id,val){
+  db.collection("laporan").doc(id).update({status:val});
 }
 
-function exportExcel(){
-  const data=allData.map(d=>({
-    Nama:d.nama,
-    Unit:d.unit,
-    Kendala:d.kendala,
-    Status:d.status,
-    Respon:d.respon,
-    Waktu:d.waktu?d.waktu.toDate().toLocaleString("id-ID"):""
-  }));
-  const ws=XLSX.utils.json_to_sheet(data);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,"Laporan IPSRS");
-  XLSX.writeFile(wb,"laporan_ipsrs.xlsx");
-}
-
-searchInput.addEventListener("input",renderData);
-dateInput.addEventListener("change",renderData);
+// STAT ID FIX
+const total=document.getElementById("total");
+const selesaiEl=document.getElementById("selesai");
+const prosesEl=document.getElementById("proses");
 </script>
 
 </body>
