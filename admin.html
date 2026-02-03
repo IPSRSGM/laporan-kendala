@@ -2,27 +2,26 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Admin IPSRS - Laporan Sarpras</title>
+<title>Admin IPSRS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
 body{
   margin:0;
   font-family:Poppins,sans-serif;
-  background:linear-gradient(135deg,#4facfe,#00f2fe);
+  background:#e5e7eb;
   padding:20px;
 }
 .container{
-  max-width:1200px;
-  margin:auto;
   background:white;
-  border-radius:16px;
   padding:20px;
+  border-radius:16px;
 }
 table{
   width:100%;
@@ -32,50 +31,28 @@ th,td{
   padding:10px;
   border-bottom:1px solid #ddd;
 }
-th{background:#f1f5f9}
 select,textarea{
   width:100%;
-  padding:8px;
-  border-radius:8px;
 }
 .status{
   padding:4px 10px;
-  border-radius:14px;
-  font-size:12px;
+  border-radius:12px;
   color:white;
+  font-size:12px;
 }
 .baru{background:#fbbf24}
 .proses{background:#3b82f6}
 .pending{background:#a855f7}
 .selesai{background:#22c55e}
-.stat{
-  display:flex;
-  gap:15px;
-  margin-bottom:20px;
-}
-.card{
-  flex:1;
-  background:#f1f5f9;
-  padding:15px;
-  border-radius:12px;
-  text-align:center;
-  font-weight:600;
-}
 </style>
 </head>
 
 <body>
 
 <div class="container">
-<h2>🛠️ Admin IPSRS – Laporan Kendala Sarpras</h2>
+<h2>🛠️ Admin IPSRS</h2>
 
-<!-- STATISTIK -->
-<div class="stat">
-  <div class="card">Total<br><span id="total">0</span></div>
-  <div class="card">Baru<br><span id="baru">0</span></div>
-  <div class="card">Proses<br><span id="proses">0</span></div>
-  <div class="card">Selesai<br><span id="selesai">0</span></div>
-</div>
+<button onclick="exportExcel()">⬇️ Download Excel</button>
 
 <table>
 <thead>
@@ -85,7 +62,7 @@ select,textarea{
 <th>Unit</th>
 <th>Kendala</th>
 <th>Status</th>
-<th>Respon Teknisi</th>
+<th>Respon</th>
 </tr>
 </thead>
 <tbody id="tabel"></tbody>
@@ -94,54 +71,44 @@ select,textarea{
 
 <script>
 firebase.initializeApp({
-  apiKey: "ISI_API_KEY_KAMU",
-  authDomain: "laporan-kendala-rsgm-165f6.firebaseapp.com",
-  projectId: "laporan-kendala-rsgm-165f6"
+  apiKey: "ISI_API_KEY",
+  authDomain: "PROJECT.firebaseapp.com",
+  projectId: "PROJECT_ID"
 });
 
 const db = firebase.firestore();
 const tabel = document.getElementById("tabel");
+let allData=[];
 
 db.collection("laporan")
 .orderBy("waktu","desc")
 .onSnapshot(snap=>{
   tabel.innerHTML="";
-  let total=0,baru=0,proses=0,selesai=0;
-
+  allData=[];
   snap.forEach(doc=>{
     const d=doc.data();
-    total++;
-    if(d.status==="baru") baru++;
-    if(d.status==="proses") proses++;
-    if(d.status==="selesai") selesai++;
-
+    allData.push(d);
     tabel.innerHTML+=`
-    <tr>
-      <td>${d.waktu ? d.waktu.toDate().toLocaleString("id-ID"):"-"}</td>
-      <td>${d.nama}</td>
-      <td>${d.unit}</td>
-      <td>${d.kendala}</td>
-      <td>
-        <span class="status ${d.status}">${d.status.toUpperCase()}</span><br>
-        <select onchange="ubahStatus('${doc.id}',this.value)">
-          <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
-          <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
-          <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
-          <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
-        </select>
-      </td>
-      <td>
-        <textarea
-          onchange="ubahRespon('${doc.id}',this.value)"
-          placeholder="Isi respon teknisi...">${d.respon||""}</textarea>
-      </td>
-    </tr>`;
+      <tr>
+        <td>${d.waktu ? d.waktu.toDate().toLocaleString("id-ID"):""}</td>
+        <td>${d.nama}</td>
+        <td>${d.unit}</td>
+        <td>${d.kendala}</td>
+        <td>
+          <span class="status ${d.status}">${d.status}</span>
+          <select onchange="ubahStatus('${doc.id}',this.value)">
+            <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
+            <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
+            <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
+            <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
+          </select>
+        </td>
+        <td>
+          <textarea onchange="ubahRespon('${doc.id}',this.value)">${d.respon||""}</textarea>
+        </td>
+      </tr>
+    `;
   });
-
-  document.getElementById("total").innerText=total;
-  document.getElementById("baru").innerText=baru;
-  document.getElementById("proses").innerText=proses;
-  document.getElementById("selesai").innerText=selesai;
 });
 
 function ubahStatus(id,val){
@@ -149,6 +116,21 @@ function ubahStatus(id,val){
 }
 function ubahRespon(id,val){
   db.collection("laporan").doc(id).update({respon:val});
+}
+
+function exportExcel(){
+  const data = allData.map(d=>({
+    Waktu: d.waktu ? d.waktu.toDate().toLocaleString("id-ID"):"",
+    Nama: d.nama,
+    Unit: d.unit,
+    Kendala: d.kendala,
+    Status: d.status,
+    Respon: d.respon
+  }));
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Laporan");
+  XLSX.writeFile(wb,"laporan_sarpras.xlsx");
 }
 </script>
 
