@@ -4,58 +4,111 @@
 <meta charset="UTF-8">
 <title>Laporan Kendala Sarpras RSGM Unair</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
 <style>
 *{box-sizing:border-box}
 body{
   margin:0;
-  font-family:Poppins,sans-serif;
+  min-height:100vh;
+  font-family:'Poppins',sans-serif;
   background:linear-gradient(135deg,#4facfe,#00f2fe);
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
   padding:30px 0;
 }
 .app{
+  width:100%;
   max-width:600px;
-  margin:auto;
   background:rgba(255,255,255,.25);
   backdrop-filter:blur(16px);
   border-radius:22px;
   padding:26px;
+  box-shadow:0 25px 50px rgba(0,0,0,.25);
 }
-.header{text-align:center;color:#fff}
-label{color:#fff;font-size:13px;margin-top:14px;display:block}
+.header{
+  text-align:center;
+  color:#fff;
+  margin-bottom:20px;
+}
+label{
+  color:#fff;
+  font-size:13px;
+  margin-top:14px;
+  display:block;
+}
 input,textarea{
-  width:100%;padding:14px;margin-top:6px;
-  border-radius:14px;border:none
+  width:100%;
+  padding:14px;
+  margin-top:6px;
+  border-radius:14px;
+  border:none;
+  outline:none;
 }
+textarea{height:90px}
 button{
-  width:100%;margin-top:20px;padding:16px;
-  border:none;border-radius:16px;
-  background:#4f46e5;color:#fff;font-weight:600
+  width:100%;
+  margin-top:20px;
+  padding:16px;
+  border:none;
+  border-radius:16px;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  color:white;
+  font-size:16px;
+  font-weight:600;
+  cursor:pointer;
 }
-.search{
+.filter{
+  background:rgba(255,255,255,.25);
+  border-radius:16px;
+  padding:12px;
   margin-top:20px;
 }
+#toast{
+  position:fixed;
+  bottom:25px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#111;
+  color:white;
+  padding:14px 20px;
+  border-radius:14px;
+  display:none;
+  z-index:999;
+}
+.laporan-list{
+  margin-top:20px;
+  max-height:420px;
+  overflow-y:auto;
+}
 .laporan-item{
-  background:#fff;border-radius:14px;
-  padding:12px;margin-top:12px
+  background:white;
+  border-radius:14px;
+  padding:12px 15px;
+  margin-bottom:12px;
 }
+.nama{font-weight:600}
+.unit{font-size:13px;margin-bottom:6px}
+.waktu{font-size:12px;color:#555;margin-bottom:6px}
 .status-bar{
-  padding:6px 12px;border-radius:12px;
-  color:#fff;font-size:12px;font-weight:600
+  padding:6px 12px;
+  border-radius:12px;
+  font-weight:600;
+  color:white;
+  display:inline-block;
+  font-size:12px;
 }
-.baru{background:#f59e0b}
+.baru{background:#fbbf24}
 .proses{background:#3b82f6}
 .selesai{background:#22c55e}
-.waktu{
-  font-size:12px;
-  color:#555;
-  margin-top:4px;
-}
+.pending{background:#a855f7}
 </style>
 </head>
 
 <body>
+
 <div class="app">
   <div class="header">
     <h2>📋 Laporan Kendala Sarpras</h2>
@@ -64,92 +117,135 @@ button{
 
   <label>Nama</label>
   <input id="nama">
+
   <label>Unit / Ruangan</label>
   <input id="unit">
+
   <label>Kendala</label>
   <textarea id="kendala"></textarea>
 
-  <button onclick="kirim()">🚀 Kirim Laporan</button>
+  <button id="btnKirim">🚀 Kirim Laporan</button>
 
-  <!-- SEARCH -->
-  <input id="search" class="search" placeholder="🔍 Cari nama / unit / tanggal (dd/mm/yyyy)" oninput="render()">
+  <!-- FILTER -->
+  <div class="filter">
+    <label>🔍 Cari Laporan</label>
+    <input id="searchInput" placeholder="Nama / Unit / Kendala">
 
-  <div id="list"></div>
+    <label>📅 Filter Tanggal</label>
+    <input type="date" id="dateInput">
+  </div>
+
+  <div class="laporan-list" id="laporanList"></div>
 </div>
 
+<div id="toast"></div>
+
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
+// ================= FIREBASE =================
 firebase.initializeApp({
-  apiKey:"ISI_API_KEY_KAMU",
-  authDomain:"laporan-kendala-rsgm-165f6.firebaseapp.com",
-  projectId:"laporan-kendala-rsgm-165f6"
+  apiKey: "ISI_API_KEY_KAMU",
+  authDomain: "laporan-kendala-rsgm-165f6.firebaseapp.com",
+  projectId: "laporan-kendala-rsgm-165f6"
 });
-const db=firebase.firestore();
+const db = firebase.firestore();
+
+// ================= ELEMENT =================
+const namaInput = document.getElementById("nama");
+const unitInput = document.getElementById("unit");
+const kendalaInput = document.getElementById("kendala");
+const laporanList = document.getElementById("laporanList");
+const btnKirim = document.getElementById("btnKirim");
 
 let allData=[];
 
-// KIRIM LAPORAN
-function kirim(){
-  if(!nama.value || !unit.value || !kendala.value){
-    alert("Lengkapi data");
+// ================= TOAST =================
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.innerText = msg;
+  t.style.display = "block";
+  setTimeout(()=> t.style.display="none",3000);
+}
+
+// ================= KIRIM LAPORAN =================
+btnKirim.onclick=()=>{
+  if(!namaInput.value||!unitInput.value||!kendalaInput.value){
+    toast("⚠️ Semua kolom wajib diisi");
     return;
   }
 
   db.collection("laporan").add({
-    nama:nama.value,
-    unit:unit.value,
-    kendala:kendala.value,
+    nama:namaInput.value,
+    unit:unitInput.value,
+    kendala:kendalaInput.value,
     status:"baru",
     respon:"",
     waktu:firebase.firestore.FieldValue.serverTimestamp()
+  }).then(()=>{
+    toast("✅ Laporan berhasil dikirim");
+    namaInput.value="";
+    unitInput.value="";
+    kendalaInput.value="";
   });
+};
 
-  nama.value=unit.value=kendala.value="";
-}
-
-// REALTIME LOAD
+// ================= REALTIME =================
 db.collection("laporan")
 .orderBy("waktu","desc")
-.onSnapshot(snap=>{
+.onSnapshot(snapshot=>{
   allData=[];
-  snap.forEach(d=>{
-    const x=d.data();
-    if(x.waktu){
-      allData.push(x);
-    }
+  snapshot.forEach(doc=>{
+    allData.push(doc.data());
   });
-  render();
+  renderData();
 });
 
-// RENDER + SEARCH
-function render(){
-  const key=document.getElementById("search").value.toLowerCase();
-  list.innerHTML="";
+// ================= RENDER =================
+function renderData(){
+  laporanList.innerHTML="";
+  const search=document.getElementById("searchInput").value.toLowerCase();
+  const date=document.getElementById("dateInput").value;
 
-  allData.filter(x=>{
-    const t=x.waktu.toDate();
-    const tanggal=t.toLocaleDateString("id-ID");
-    return (
-      x.nama.toLowerCase().includes(key) ||
-      x.unit.toLowerCase().includes(key) ||
-      tanggal.includes(key)
-    );
-  }).forEach(x=>{
-    const t=x.waktu.toDate();
-    const waktu=t.toLocaleString("id-ID");
+  allData.filter(d=>{
+    const textMatch =
+      d.nama.toLowerCase().includes(search) ||
+      d.unit.toLowerCase().includes(search) ||
+      d.kendala.toLowerCase().includes(search);
 
-    list.innerHTML+=`
-      <div class="laporan-item">
-        <b>${x.nama}</b> (${x.unit})<br>
-        🛠 ${x.kendala}<br>
-        <div class="waktu">🕒 ${waktu}</div>
-        <span class="status-bar ${x.status}">${x.status}</span><br>
-        ${x.respon?`💬 ${x.respon}`:"⏳ Menunggu teknisi"}
-      </div>`;
+    let dateMatch=true;
+    if(date && d.waktu){
+      dateMatch=d.waktu.toDate().toISOString().slice(0,10)===date;
+    }
+    return textMatch && dateMatch;
+  }).forEach(d=>{
+    const div=document.createElement("div");
+    div.className="laporan-item";
+    div.innerHTML=`
+      <div class="waktu">🕒 ${d.waktu?d.waktu.toDate().toLocaleString("id-ID"):"-"}</div>
+      <div class="nama">${d.nama}</div>
+      <div class="unit">Unit: ${d.unit}</div>
+      <div>🛠️ ${d.kendala}</div>
+      <div style="margin-top:8px">
+        <span class="status-bar ${d.status}">
+          ${d.status.toUpperCase()}
+        </span>
+      </div>
+      ${d.respon
+        ? `<div style="margin-top:6px;font-size:13px">💬 ${d.respon}</div>`
+        : `<div style="margin-top:6px;font-size:13px;color:#888">⏳ Menunggu teknisi</div>`
+      }
+    `;
+    laporanList.appendChild(div);
   });
 }
+
+// ================= EVENT =================
+document.getElementById("searchInput").addEventListener("input",renderData);
+document.getElementById("dateInput").addEventListener("change",renderData);
 </script>
+
 </body>
 </html>
