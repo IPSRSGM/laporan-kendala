@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Laporan Kendala Sarpras</title>
+<title>Admin IPSRS - Laporan Sarpras</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11,7 +11,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
-*{box-sizing:border-box}
 body{
   margin:0;
   font-family:Poppins,sans-serif;
@@ -19,73 +18,48 @@ body{
   padding:20px;
 }
 .container{
-  max-width:1100px;
+  max-width:1200px;
   margin:auto;
-  background:#fff;
-  border-radius:12px;
+  background:white;
+  border-radius:16px;
   padding:20px;
 }
-h2{margin-top:0}
-
-input,select,textarea,button{
-  padding:10px;
-  margin:5px 0;
-  width:100%;
-  border-radius:8px;
-  border:1px solid #ccc;
-  font-family:Poppins;
-}
-button{
-  background:#4facfe;
-  color:#fff;
-  border:none;
-  cursor:pointer;
-}
-button:hover{opacity:.9}
-
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:20px;
-}
-
 table{
   width:100%;
   border-collapse:collapse;
-  margin-top:15px;
 }
 th,td{
   padding:10px;
   border-bottom:1px solid #ddd;
-  text-align:left;
 }
 th{background:#f1f5f9}
-
-.status{
-  padding:5px 10px;
-  border-radius:20px;
-  font-size:12px;
+select,textarea{
+  width:100%;
+  padding:8px;
+  border-radius:8px;
 }
-.open{background:#fee2e2;color:#b91c1c}
-.process{background:#fef9c3;color:#92400e}
-.done{background:#dcfce7;color:#166534}
-
+.status{
+  padding:4px 10px;
+  border-radius:14px;
+  font-size:12px;
+  color:white;
+}
+.baru{background:#fbbf24}
+.proses{background:#3b82f6}
+.pending{background:#a855f7}
+.selesai{background:#22c55e}
 .stat{
   display:flex;
   gap:15px;
+  margin-bottom:20px;
 }
 .card{
   flex:1;
   background:#f1f5f9;
   padding:15px;
-  border-radius:10px;
+  border-radius:12px;
   text-align:center;
   font-weight:600;
-}
-
-@media print{
-  button,select,input,textarea{display:none}
-  body{background:#fff}
 }
 </style>
 </head>
@@ -93,143 +67,89 @@ th{background:#f1f5f9}
 <body>
 
 <div class="container">
-<h2>📋 Sistem Laporan Kendala Sarpras</h2>
-
-<!-- FORM USER -->
-<h3>➕ Input Laporan</h3>
-<input id="ruangan" placeholder="Nama Ruangan">
-<textarea id="kendala" placeholder="Deskripsi Kendala"></textarea>
-<button onclick="kirim()">Kirim Laporan</button>
-
-<hr>
-
-<!-- FILTER -->
-<select id="filterBulan" onchange="renderData()">
-  <option value="now">Bulan Ini</option>
-  <option value="all">Semua Data</option>
-</select>
+<h2>🛠️ Admin IPSRS – Laporan Kendala Sarpras</h2>
 
 <!-- STATISTIK -->
 <div class="stat">
-  <div class="card">Total Laporan<br><span id="total">0</span></div>
-  <div class="card">Selesai<br><span id="selesai">0</span></div>
+  <div class="card">Total<br><span id="total">0</span></div>
+  <div class="card">Baru<br><span id="baru">0</span></div>
   <div class="card">Proses<br><span id="proses">0</span></div>
+  <div class="card">Selesai<br><span id="selesai">0</span></div>
 </div>
 
-<!-- TABEL -->
 <table>
 <thead>
 <tr>
-<th>Ruangan</th>
+<th>Waktu</th>
+<th>Nama</th>
+<th>Unit</th>
 <th>Kendala</th>
 <th>Status</th>
-<th>Admin</th>
-<th>Waktu</th>
+<th>Respon Teknisi</th>
 </tr>
 </thead>
 <tbody id="tabel"></tbody>
 </table>
-
-<br>
-<button onclick="window.print()">🖨️ Cetak Laporan</button>
-
 </div>
 
 <script>
-// 🔥 GANTI CONFIG FIREBASE KAMU
 firebase.initializeApp({
-  apiKey: "API_KEY",
-  authDomain: "PROJECT.firebaseapp.com",
-  projectId: "PROJECT_ID"
+  apiKey: "ISI_API_KEY_KAMU",
+  authDomain: "laporan-kendala-rsgm-165f6.firebaseapp.com",
+  projectId: "laporan-kendala-rsgm-165f6"
 });
 
 const db = firebase.firestore();
-let allData = [];
+const tabel = document.getElementById("tabel");
 
-// REALTIME
 db.collection("laporan")
 .orderBy("waktu","desc")
 .onSnapshot(snap=>{
-  allData=[];
+  tabel.innerHTML="";
+  let total=0,baru=0,proses=0,selesai=0;
+
   snap.forEach(doc=>{
     const d=doc.data();
-    if(d.waktu){
-      allData.push({id:doc.id,...d});
-    }
-  });
-  renderData();
-});
+    total++;
+    if(d.status==="baru") baru++;
+    if(d.status==="proses") proses++;
+    if(d.status==="selesai") selesai++;
 
-// KIRIM LAPORAN
-function kirim(){
-  const r = ruangan.value.trim();
-  const k = kendala.value.trim();
-  if(!r||!k) return alert("Lengkapi data");
-
-  db.collection("laporan").add({
-    ruangan:r,
-    kendala:k,
-    status:"Open",
-    waktu:firebase.firestore.FieldValue.serverTimestamp()
-  });
-
-  ruangan.value="";
-  kendala.value="";
-}
-
-// RENDER + FILTER
-function renderData(){
-  const tbody=document.getElementById("tabel");
-  tbody.innerHTML="";
-
-  const filter=document.getElementById("filterBulan").value;
-  const now=new Date();
-
-  let selesai=0, proses=0;
-
-  allData.filter(d=>{
-    if(filter==="all") return true;
-    const t=d.waktu.toDate();
-    return t.getMonth()===now.getMonth() &&
-           t.getFullYear()===now.getFullYear();
-  }).forEach(d=>{
-    if(d.status==="Selesai") selesai++;
-    if(d.status==="Proses") proses++;
-
-    tbody.innerHTML+=`
+    tabel.innerHTML+=`
     <tr>
-      <td>${d.ruangan}</td>
+      <td>${d.waktu ? d.waktu.toDate().toLocaleString("id-ID"):"-"}</td>
+      <td>${d.nama}</td>
+      <td>${d.unit}</td>
       <td>${d.kendala}</td>
       <td>
-        <span class="status ${
-          d.status==="Open"?"open":
-          d.status==="Proses"?"process":"done"
-        }">${d.status}</span>
-      </td>
-      <td>
-        <select onchange="ubahStatus('${d.id}',this.value)">
-          <option ${d.status==="Open"?"selected":""}>Open</option>
-          <option ${d.status==="Proses"?"selected":""}>Proses</option>
-          <option ${d.status==="Selesai"?"selected":""}>Selesai</option>
+        <span class="status ${d.status}">${d.status.toUpperCase()}</span><br>
+        <select onchange="ubahStatus('${doc.id}',this.value)">
+          <option value="baru" ${d.status==="baru"?"selected":""}>Baru</option>
+          <option value="proses" ${d.status==="proses"?"selected":""}>Proses</option>
+          <option value="pending" ${d.status==="pending"?"selected":""}>Pending</option>
+          <option value="selesai" ${d.status==="selesai"?"selected":""}>Selesai</option>
         </select>
       </td>
-      <td>${d.waktu.toDate().toLocaleString()}</td>
+      <td>
+        <textarea
+          onchange="ubahRespon('${doc.id}',this.value)"
+          placeholder="Isi respon teknisi...">${d.respon||""}</textarea>
+      </td>
     </tr>`;
   });
 
-  total.innerText=tbody.children.length;
-  selesaiEl.innerText=selesai;
-  prosesEl.innerText=proses;
-}
+  document.getElementById("total").innerText=total;
+  document.getElementById("baru").innerText=baru;
+  document.getElementById("proses").innerText=proses;
+  document.getElementById("selesai").innerText=selesai;
+});
 
 function ubahStatus(id,val){
   db.collection("laporan").doc(id).update({status:val});
 }
-
-// STAT ID FIX
-const total=document.getElementById("total");
-const selesaiEl=document.getElementById("selesai");
-const prosesEl=document.getElementById("proses");
+function ubahRespon(id,val){
+  db.collection("laporan").doc(id).update({respon:val});
+}
 </script>
 
 </body>
